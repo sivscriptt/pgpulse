@@ -1,0 +1,25 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        postgres: [15, 16, 17]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_PASSWORD: ci
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -v ./...
+        env:
+          PGPULSE_TEST_DSN: postgres://postgres:ci@localhost:5432/postgres?sslmode=disable
+      - run: go build -o pgpulse . && ./pgpulse postgres://postgres:ci@localhost:5432/postgres?sslmode=disable || test $? -lt 3
